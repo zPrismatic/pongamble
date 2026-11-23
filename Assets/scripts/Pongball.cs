@@ -1,16 +1,21 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 [RequireComponent(typeof(Rigidbody2D))]
 public class PongBall : MonoBehaviour
 {
-    [SerializeField] private float speed = 8f;
-    [SerializeField, Range(0.1f, 1f)] private float wallExitAngleMultiplier = 0.25f;
-    [SerializeField, Range(0f, 1f)] private float normalWallBounceChance = 0.15f;
-    [SerializeField] private float minAngle = 5f;
-    [SerializeField] private float maxAngle = 45f;
+    [Header("Speed")]
+    [FormerlySerializedAs("speed")]
+    [SerializeField] private float startSpeed = 8f;
+    [SerializeField] private float speedIncreasePerBounce = 0.5f;
+    [SerializeField] private float maxSpeed = 100f;
+
+    [Header("Respawn")]
+    [SerializeField] private Vector2 respawnPosition = Vector2.zero;
 
     private Rigidbody2D rb;
     private Vector2 lastVelocity;
+    private float currentSpeed;
 
     private void Awake()
     {
@@ -20,40 +25,40 @@ public class PongBall : MonoBehaviour
         rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
     }
 
-	private void Start()
-	{
-		Launch();
-	}
+    private void Start()
+    {
+        Launch();
+    }
 
     private void Launch()
     {
-        Vector2 direction = new Vector2(-1f, Random.Range(-1f, 1f)).normalized;
-        rb.linearVelocity = direction * speed;
+        currentSpeed = startSpeed;
+
+        float x = Random.value < 0.5f ? -1f : 1f;
+        Vector2 direction = new Vector2(x, Random.Range(-1f, 1f)).normalized;
+
+        rb.linearVelocity = direction * currentSpeed;
+        lastVelocity = rb.linearVelocity;
     }
 
-    private void FixedUpdate() {lastVelocity = rb.linearVelocity;}
+    public void ResetToCenter()
+    {
+        rb.position = respawnPosition;
+        Launch();
+    }
+
+    private void FixedUpdate()
+    {
+        lastVelocity = rb.linearVelocity;
+    }
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        Vector2 contactNormal = collision.GetContact(0).normal;
-        bool hitTopOrBottom = Mathf.Abs(contactNormal.y) > Mathf.Abs(contactNormal.x);
-        Vector2 normal = hitTopOrBottom
-            ? new Vector2(0f, Mathf.Sign(contactNormal.y))
-            : new Vector2(Mathf.Sign(contactNormal.x), 0f);
+        currentSpeed = Mathf.Min(currentSpeed + speedIncreasePerBounce, maxSpeed);
 
+        Vector2 normal = collision.GetContact(0).normal;
         Vector2 reflected = Vector2.Reflect(lastVelocity, normal);
 
-        float angle = Mathf.Atan2(Mathf.Abs(reflected.y), Mathf.Abs(reflected.x)) * Mathf.Rad2Deg;
-
-        if (hitTopOrBottom && Random.value >= normalWallBounceChance)
-            angle *= wallExitAngleMultiplier;
-
-        angle = Mathf.Clamp(angle, minAngle, maxAngle);
-
-        float rad = angle * Mathf.Deg2Rad;
-        Vector2 direction = new Vector2(
-            Mathf.Sign(reflected.x) * Mathf.Cos(rad),
-            Mathf.Sign(reflected.y) * Mathf.Sin(rad));
-        	rb.linearVelocity = direction * speed;
+        rb.linearVelocity = reflected.normalized * currentSpeed;
     }
 }
